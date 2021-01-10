@@ -2,46 +2,46 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.border.LineBorder;
 
 public class HeartBeat {
-    // Settings
+    /********** Config **********/
+    private static final int ROW_SIZE = 10;
+    private static final int COL_SIZE = 9;
     private static final int TILE_SIZE = 45;
     private static final int MID_TILE_SIZE = TILE_SIZE * 2;
     private static final int LONG_TILE_SIZE = TILE_SIZE * 5;
-    private static final int ROW_SIZE = 10;
-    private static final int COL_SIZE = 9;
-    
-    //
-    private enum TileType {
-        unkown,
-        blue,
-        green,
-        purple,
-        red,
-        yellow
-    }
-    
-    private enum ButtonType {
-        Color,
-        Run,
-        Tile
-    }
-    
-    
-    // Common
-    private TileType[][] tiles;
+    private static final int THICK_BORDER = 5;
+    private static final String TILES_FILE = "tiles.csv";
+
+    /********** Enums **********/
+    private enum TileType { unknown, blue, green, purple, red, yellow }
+    private enum ButtonType { Color, Run, Tile }
+
+    /********** Components **********/
+    private TileType[][] tiles; // temporary global to compute tiles grid and store result to refresh tileButtons
     private JButton setButton, runButton;
-    private JButton[][] tileButtons;
+    private JButton[][] tileButtons; // tile button, actual current color should always be from tileButtons
     private JLabel resultLabel;
     
+    /********** Basic **********/
     private Color type2color(TileType type) {
         switch(type) {
-        case unkown:
+        case unknown:
             return Color.LIGHT_GRAY;
         case blue:
             return Color.blue;
@@ -57,7 +57,7 @@ public class HeartBeat {
             // unknown error let's exit
             System.exit(1);
         }
-        return Color.gray;
+        return Color.LIGHT_GRAY;
     }
     
     private TileType color2type(Color color) {
@@ -66,22 +66,21 @@ public class HeartBeat {
                 return type;
             }
         }
-        return TileType.unkown;
+        return TileType.unknown;
     }
     
-    
-    // UI
+    /********** UI **********/
     private JButton createButton(ButtonType type) {
-        // create uses default and adds a callback action
         JButton button = new JButton();
         switch(type) {
         case Color:
             button.setText("Set Color");
             button.setPreferredSize(new Dimension(MID_TILE_SIZE, TILE_SIZE));
-            button.setBackground(type2color(TileType.unkown));
+            button.setBackground(type2color(TileType.unknown));
             button.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent event) {
+                    // Rotate color for setButton
                     JButton bt = (JButton) event.getSource();
                     int tp = (color2type(bt.getBackground()).ordinal() + 1) % TileType.values().length;
                     bt.setBackground(type2color(TileType.values()[tp]));
@@ -96,18 +95,23 @@ public class HeartBeat {
                 @Override
                 public void actionPerformed(ActionEvent event) {
                     if (done) {
-                        // clean up tiles and then show suggest button
-                        cleanTiles(1);
-                        refreshColor();
+                        // Clean up tiles with strategy from suggestAlgo
+                        // Initial tiles shouldn't have any cleanup 
+                        clearTiles();
+                        writeTilesToButtons();
                         button.setText("Suggest");
                         enableTileButtons(true);
                         done = false;
+                        // Save to a file in case we close app
+                        saveTiles();
                     } else {
-                        if (readTiles()) {
+                        if (readTilesFromButtons()) {
                             suggestAlgo();
                             button.setText("Done!");
                             enableTileButtons(false);
                             done = true;
+                        } else {
+                            resultLabel.setText("Missing color for some tiles!");
                         }
                     }
                 }
@@ -115,12 +119,19 @@ public class HeartBeat {
             break;
         default:
             button.setPreferredSize(new Dimension(TILE_SIZE, TILE_SIZE));
-            button.setBackground(type2color(TileType.unkown));
             button.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent event) {
+                    // Set button color same as Color button
                     JButton bt = (JButton) event.getSource();
-                    setButton(bt);
+                    bt.setBackground(setButton.getBackground());
+                    // When updating tileButtons
+                    // Push to bottom whenever a tile is cleared and possible
+                    if(color2type(bt.getBackground()) == TileType.unknown) {
+                        readTilesFromButtons();
+                        pushTiles(tiles);
+                        writeTilesToButtons();
+                    }
                 }
             });
             break;
@@ -128,28 +139,7 @@ public class HeartBeat {
         return button;
     }
     
-    private void setColor(JButton button, TileType type) {
-        button.setBackground(type2color(type));
-    }
-    
-    private void setButton(JButton button) {
-        // set button color same as Color button
-        button.setBackground(setButton.getBackground());
-        
-    }
-    
-    private void refreshColor() {
-        for(int row = 0; row < ROW_SIZE; ++row) {
-            for(int col = 0; col < COL_SIZE; ++col) {
-                setColor(tileButtons[row][col], tiles[row][col]);
-            }
-        }
-    }
-    
-    private JButton createTile() {
-        return createButton(ButtonType.Tile);
-    }
-    
+    // Enable/Disable tileButtons
     private void enableTileButtons(boolean enable) {
         for(int row = 0; row < ROW_SIZE; ++row) {
             for(int col = 0; col < COL_SIZE; ++col) {
@@ -158,12 +148,197 @@ public class HeartBeat {
         }
     }
     
-    private void init() {        
+    // Read type from current tileButtons and store in tiles
+    // Return if all tiles have color
+    private boolean readTilesFromButtons() {
+        boolean allColor = true;
+        for(int row = 0; row < ROW_SIZE; ++row) {
+            for(int col = 0; col < COL_SIZE; ++col) {
+                tiles[row][col] = color2type(tileButtons[row][col].getBackground());
+                if (allColor && tiles[row][col] == TileType.unknown) {
+                    allColor = false;
+                }
+            }
+        }
+        return allColor;
+    }
+
+    private void writeTilesToButtons() {
+        for(int row = 0; row < ROW_SIZE; ++row) {
+            for(int col = 0; col < COL_SIZE; ++col) {
+                tileButtons[row][col].setBorder(new LineBorder(Color.BLACK));
+                tileButtons[row][col].setBackground(type2color(tiles[row][col]));
+            }
+        }
+    }
+    
+    /********** Algorithm **********/
+    
+    // Compute score based on rules
+    private int computeScore(ArrayList<Integer> counts) {
+        int score = 0;
+        for(int i = 0; i < counts.size(); ++i) {
+            score += counts.get(i) * (i + 1);
+        }
+        return score;
+    }
+    
+    private boolean clearable(TileType[][] ts, int row, int col) {
+        if (ts[row][col] == TileType.unknown) {
+            return false;
+        }
+        int[] counts = new int[2];
+        int[][] moves = {{0, 1}, {1, 0}};
+        for(int idx = 0; idx < counts.length; ++idx) { // try row or col
+            for(int dir = -1; dir <= 1; dir += 2) { // dir: -1, 1
+                boolean connected = true;
+                for(int multi = 1; connected && multi <= 2; ++multi) { // multi: 1 or 2 moves
+                    int r = moves[idx][0] * dir * multi + row;
+                    int c = moves[idx][1] * dir * multi + col;
+                    if (r < 0 || c < 0 || r >= ROW_SIZE || c >= COL_SIZE ||
+                        ts[r][c] != tiles[row][col]) {
+                        connected = false;
+                    }
+                    if (connected) {
+                        ++counts[idx];
+                    }
+                }
+            }
+        }
+        // Counts greater than 2 means at least 3 if including ts[row][col]
+        return counts[0] >= 2 || counts[1] >= 2;
+    }
+
+    // Update tiles with nextTiles grid
+    // In the meantime, push tiles to bottom if there is a gap
+    private void pushTiles(TileType[][] nextTiles) {
+        for(int col = 0; col < COL_SIZE; ++col) {
+            int wtRow = ROW_SIZE - 1;
+            for(int rdRow = wtRow; rdRow >= 0; --rdRow) {
+                if (nextTiles[rdRow][col] != TileType.unknown) {
+                    tiles[wtRow--][col] = nextTiles[rdRow][col];
+                }
+            }
+            while(wtRow >= 0) {
+                tiles[wtRow--][col] = TileType.unknown;
+            }
+        }
+    }
+    
+    // Return a array of clear count per level
+    private ArrayList<Integer> clearTiles() {
+        // tiles may be previously set by suggestAlgo
+        // Compute nextTiles result from tiles
+        ArrayList<Integer> counts = new ArrayList<>();
+        int cnt;
+        do {
+            cnt = 0;
+            TileType[][] nextTiles = new TileType[ROW_SIZE][COL_SIZE];
+            for(int row = 0; row < ROW_SIZE; ++row) {
+                for(int col = 0; col < COL_SIZE; ++col) {
+                    if (clearable(tiles, row, col)) {
+                        ++cnt;
+                        nextTiles[row][col] = TileType.unknown;
+                    } else {
+                        nextTiles[row][col] = tiles[row][col];
+                    }
+                }
+            }
+            if (cnt != 0) {
+                counts.add(cnt);
+                pushTiles(nextTiles);
+            }
+        } while(cnt != 0);
+        return counts; 
+    }
+    
+    private void suggestAlgo() {
+        int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0;
+        TileType tmp;
+        // Check in below sequence:
+        // 1. col combo -> row combo
+        // 2. upper left -> bottom right
+        for(int dir = 0; dir <= 1; ++dir) {
+            for(int row = dir; row < ROW_SIZE; ++row) {
+                for(int col = 1 - dir; col < COL_SIZE; ++col) {
+                    readTilesFromButtons();
+                    int r = row - dir;
+                    int c = col - 1 + dir;
+                    tmp = tiles[r][c];
+                    tiles[r][c] = tiles[row][col];
+                    tiles[row][col] = tmp;
+                    ArrayList<Integer> counts = clearTiles();
+                    int level = counts.size();
+                    int score = computeScore(counts);
+                    if (score >= goodScore) {
+                        goodScore = score;
+                        goodLevel = level;
+                        row0 = r;
+                        col0 = c;
+                        row1 = row;
+                        col1 = col;
+                    }
+                }
+            }
+        }
+        
+        // Record suggested move in tiles
+        readTilesFromButtons();
+        tmp = tiles[row0][col0];
+        tiles[row0][col0] = tiles[row1][col1];
+        tiles[row1][col1] = tmp;
+        // Highlight suggested move
+        tileButtons[row0][col0].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
+        tileButtons[row1][col1].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
+        // Note resultLabel
+        resultLabel.setText("level:" + goodLevel + ", Score:" + goodScore);
+    }
+    
+    /********** Load / Save **********/
+    // For easy tuning
+    private void saveTiles() {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter(TILES_FILE));
+            for(int row = 0; row < ROW_SIZE; ++row) {
+                writer.append(Integer.toString(tiles[row][0].ordinal()));
+                for(int col = 1; col < COL_SIZE; ++col) {
+                    writer.append("," + Integer.toString(tiles[row][col].ordinal()));
+                }
+                writer.append("\n");
+            }
+            writer.close();
+        } catch (IOException e) {
+            System.out.println("Save failed!");
+        }
+    }
+    
+    private void loadTiles() {
+        tiles = new TileType[ROW_SIZE][COL_SIZE];
+        try {
+            Scanner scanner = new Scanner(new File(TILES_FILE));
+            for(int row = 0; row < ROW_SIZE; ++row) {
+                String[] line = scanner.nextLine().split(",");
+                for(int col = 0; col < COL_SIZE; ++col) {
+                    tiles[row][col] = TileType.values()[Integer.valueOf(line[col])];
+                }
+            }
+            scanner.close();
+        } catch (Exception e) {
+            for(int row = 0; row < ROW_SIZE; ++row) {
+                for(int col = 0; col < COL_SIZE; ++col) {
+                    tiles[row][col] = TileType.unknown;
+                }
+            }
+        }
+    }
+    
+    /********** Main **********/
+    public HeartBeat() {
         // create a container
         JPanel pane = new JPanel();
         pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
         
-        // create top line
+        // Create top line
         setButton = createButton(ButtonType.Color);
         runButton = createButton(ButtonType.Run);
         resultLabel = new JLabel();
@@ -176,171 +351,28 @@ public class HeartBeat {
         topLine.add(runButton);
         pane.add(topLine);
         
-        // create bottom grid
-        tiles = new TileType[ROW_SIZE][COL_SIZE];
+        // Create bottom grid
+        loadTiles();
         tileButtons = new JButton[ROW_SIZE][COL_SIZE];
         for(int row = 0; row < ROW_SIZE; ++row) {
             JPanel line = new JPanel();
             for(int col = 0; col < COL_SIZE; ++col) {
-                tiles[row][col] = TileType.unkown;
-                tileButtons[row][col] = createTile();
+                tileButtons[row][col] = createButton(ButtonType.Tile);
+                tileButtons[row][col].setBackground(type2color(tiles[row][col]));
                 line.add(tileButtons[row][col]);
             }
             pane.add(line);
         }
         
-        // create a window
+        // Disable tileButtons before start
+        enableTileButtons(false);
+        
+        // Create a window
         JFrame window = new JFrame("HeartBeat");
         window.setSize(650, 630);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         window.setContentPane(pane);
         window.setVisible(true);
-    }
-    
-    // Algorithm - Only learning and tune this !!!!
-    private int[] computeScore(int level, int count) {
-        int[] ret = new int[2];
-        ret[0] = level - 1; // TODO calibrate 0 when count
-        ret[1] = level; // TMP let level decide
-        return ret; // tune here
-    }
-    
-    private boolean cleanable(TileType[][] ts, int row, int col) {
-        if (ts[row][col] == TileType.unkown) {
-            return false;
-        }
-        int rowCnt = 0, colCnt = 0;
-        if (col-1 >= 0 && ts[row][col] == ts[row][col-1]) {
-            ++rowCnt;
-            if (col-2 >= 0 && ts[row][col] == ts[row][col-2]) {
-                ++rowCnt;
-            }
-        }
-        if (col+1 < COL_SIZE && ts[row][col] == ts[row][col+1]) {
-            ++rowCnt;
-            if (col+2 < COL_SIZE && ts[row][col] == ts[row][col+2]) {
-                ++rowCnt;
-            }
-        }
-        if (row-1 >= 0 && ts[row][col] == ts[row-1][col]) {
-            ++colCnt;
-            if (row-2 >= 0 && ts[row][col] == ts[row-2][col]) {
-                ++colCnt;
-            }
-        }
-        if (row+1 < ROW_SIZE && ts[row][col] == ts[row+1][col]) {
-            ++colCnt;
-            if (row+2 < ROW_SIZE && ts[row][col] == ts[row+2][col]) {
-                ++colCnt;
-            }
-        }
-        
-        return rowCnt >= 2 || colCnt >= 2;
-    }
-    private int[] cleanTiles(int level) {
-        // compute next tiles result
-        int count = 0;
-        TileType[][] nextTs = new TileType[ROW_SIZE][COL_SIZE];
-        for(int row = 0; row < ROW_SIZE; ++row) {
-            for(int col = 0; col < COL_SIZE; ++col) {
-                if (cleanable(tiles, row, col)) {
-                    ++count;
-                    nextTs[row][col] = TileType.unkown;
-                } else {
-                    nextTs[row][col] = tiles[row][col];
-                }
-            }
-        }
-        
-        int[] result = computeScore(level, count);
-        if (count != 0) {
-            // push to bottom
-            for(int col = 0; col < COL_SIZE; ++col) {
-                int wtRow = ROW_SIZE - 1;
-                for(int rdRow = wtRow; rdRow >= 0; --rdRow) {
-                    if (nextTs[rdRow][col] != TileType.unkown) {
-                        tiles[wtRow--][col] = nextTs[rdRow][col];
-                    }
-                }
-                while(wtRow >= 0) {
-                    tiles[wtRow--][col] = TileType.unkown;
-                }
-            }
-            int[] nextResult = cleanTiles(level+1);
-            result[0] = nextResult[0];
-            result[1] += nextResult[1];
-        }
-        return result; 
-    }
-    
-    private boolean readTiles() {
-        // read tile type from current board
-        // must not have unknown tile for initial clean and suggest
-        for(int row = 0; row < ROW_SIZE; ++row) {
-            for(int col = 0; col < COL_SIZE; ++col) {
-                tiles[row][col] = color2type(tileButtons[row][col].getBackground());
-                if (tiles[row][col] == TileType.unkown) {
-                    return false; // suggest failure
-                }
-            }
-        }
-        return true;
-    }
-    
-    private void suggestAlgo() {
-        int row0 = -1, col0 = -1, row1 = -1, col1 = -1;
-        int[] tmpResult, goodResult = new int[2];
-        TileType tmp;
-        for(int row = 0; row < ROW_SIZE; ++row) {
-            for(int col = 1; col < COL_SIZE; ++col) {
-                readTiles();
-                tmp = tiles[row][col-1];
-                tiles[row][col-1] = tiles[row][col];
-                tiles[row][col] = tmp;
-                tmpResult = cleanTiles(1);
-                if (tmpResult[1] >= goodResult[1]) {
-                    goodResult[0] = tmpResult[0];
-                    goodResult[1] = tmpResult[1];
-                    row0 = row;
-                    col0 = col-1;
-                    row1 = row;
-                    col1 = col;
-                }
-            }
-        }
-        for(int row = 1; row < ROW_SIZE; ++row) {
-            for(int col = 0; col < COL_SIZE; ++col) {
-                readTiles();
-                tmp = tiles[row-1][col];
-                tiles[row-1][col] = tiles[row][col];
-                tiles[row][col] = tmp;
-                tmpResult = cleanTiles(1);
-                if (tmpResult[1] >= goodResult[1]) {
-                    goodResult[0] = tmpResult[0];
-                    goodResult[1] = tmpResult[1];
-                    row0 = row-1;
-                    col0 = col;
-                    row1 = row;
-                    col1 = col;
-                }
-            }
-        }
-        
-        // update tiles that this is our intended move
-        readTiles();
-        tmp = tiles[row0][col0];
-        tiles[row0][col0] = tiles[row1][col1];
-        tiles[row1][col1] = tmp;
-        // suggest user what move
-        tileButtons[row0][col0].setBackground(Color.BLACK);
-        tileButtons[row1][col1].setBackground(Color.BLACK);
-        // update resultLabel
-        resultLabel.setText("level:" + goodResult[0] + ", Score:" + goodResult[1]);
-    }
-    
-    // Main    
-    public HeartBeat() {
-        init();
     }
     
     public static void main(String[] args) {
