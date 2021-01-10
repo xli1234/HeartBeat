@@ -4,7 +4,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -188,19 +187,18 @@ public class HeartBeat {
             return false;
         }
         int[] counts = new int[2];
-        int[][] moves = {{0, 1}, {1, 0}};
-        for(int idx = 0; idx < counts.length; ++idx) { // try row or col
+        for(int move = 0; move <= 1; ++move) { // try row or col
             for(int dir = -1; dir <= 1; dir += 2) { // dir: -1, 1
                 boolean connected = true;
                 for(int multi = 1; connected && multi <= 2; ++multi) { // multi: 1 or 2 moves
-                    int r = moves[idx][0] * dir * multi + row;
-                    int c = moves[idx][1] * dir * multi + col;
+                    int r = move * dir * multi + row;
+                    int c = (1 - move) * dir * multi + col;
                     if (r < 0 || c < 0 || r >= ROW_SIZE || c >= COL_SIZE ||
                         ts[r][c] != tiles[row][col]) {
                         connected = false;
                     }
                     if (connected) {
-                        ++counts[idx];
+                        ++counts[move];
                     }
                 }
             }
@@ -252,6 +250,9 @@ public class HeartBeat {
         return counts; 
     }
     
+    // Just check all possibilities O(n^2) * O(time to clear tiles per try)
+    // Record best option based on good score
+    // Good score criteria is defined in computeScore
     private void suggestAlgo() {
         int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0;
         TileType tmp;
