@@ -175,11 +175,16 @@ public class HeartBeat {
     
     // Compute score based on rules
     private int computeScore(ArrayList<Integer> counts) {
+        /*
+        // base score for 3,4,5,6,7
+        int[] bases = {30, 50, 100, 60, 80};
         int score = 0;
         for(int i = 0; i < counts.size(); ++i) {
-            score += counts.get(i) * (i + 1);
+            int base = counts.get(i) >= bases.length ? 120 : bases[counts.get(i)-3];
+            score += base * (i + 1);
         }
-        return score;
+        */
+        return counts.size();
     }
     
     private boolean clearable(TileType[][] ts, int row, int col) {
