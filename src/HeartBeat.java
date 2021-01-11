@@ -37,6 +37,8 @@ public class HeartBeat {
     private JButton[][] tileButtons; // tile button, actual current color should always be from tileButtons
     private JLabel resultLabel;
     
+    private boolean left2RightStrategy;
+
     /********** Basic **********/
     private Color type2color(TileType type) {
         switch(type) {
@@ -174,8 +176,7 @@ public class HeartBeat {
     /********** Algorithm **********/
     
     // Compute score based on rules
-    private int computeScore(ArrayList<Integer> counts) {
-        /*
+    private int computeBackupScore(ArrayList<Integer> counts) {
         // base score for 3,4,5,6,7
         int[] bases = {30, 50, 100, 60, 80};
         int score = 0;
@@ -183,8 +184,7 @@ public class HeartBeat {
             int base = counts.get(i) >= bases.length ? 120 : bases[counts.get(i)-3];
             score += base * (i + 1);
         }
-        */
-        return counts.size();
+        return score;
     }
     
     private boolean clearable(TileType[][] ts, int row, int col) {
@@ -261,33 +261,40 @@ public class HeartBeat {
     private void suggestAlgo() {
         int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0;
         TileType tmp;
-        // Check in below sequence:
-        // 1. col combo -> row combo
-        // 2. upper left -> bottom right
-        for(int dir = 0; dir <= 1; ++dir) {
-            for(int row = dir; row < ROW_SIZE; ++row) {
-                for(int col = 1 - dir; col < COL_SIZE; ++col) {
-                    readTilesFromButtons();
-                    int r = row - dir;
-                    int c = col - 1 + dir;
-                    tmp = tiles[r][c];
-                    tiles[r][c] = tiles[row][col];
-                    tiles[row][col] = tmp;
-                    ArrayList<Integer> counts = clearTiles();
-                    int level = counts.size();
-                    int score = computeScore(counts);
-                    if (score >= goodScore) {
-                        goodScore = score;
-                        goodLevel = level;
-                        row0 = r;
-                        col0 = c;
-                        row1 = row;
-                        col1 = col;
+        // Try 2nd strategy if clear level < 3
+        for(int strategy = 0; goodScore < 3 && strategy <= 1; ++strategy) {
+            // Check in below sequence:
+            // 1. col combo -> row combo
+            // 2. upper left -> bottom right
+            for(int dir = 0; dir <= 1; ++dir) {
+                for(int row = dir; row < ROW_SIZE; ++row) {
+                    for(int tcol = 1 - dir; tcol < COL_SIZE; ++tcol) {
+                        readTilesFromButtons();
+                        int col = left2RightStrategy ? tcol : (COL_SIZE - dir - tcol);
+                        int r = row - dir;
+                        int c = col - 1 + dir;
+                        tmp = tiles[r][c];
+                        tiles[r][c] = tiles[row][col];
+                        tiles[row][col] = tmp;
+                        ArrayList<Integer> counts = clearTiles();
+                        int level = counts.size();
+                        int score = strategy == 0 ? level : computeBackupScore(counts);
+                        if (score >= goodScore) {
+                            goodScore = score;
+                            goodLevel = level;
+                            row0 = r;
+                            col0 = c;
+                            row1 = row;
+                            col1 = col;
+                        }
                     }
                 }
             }
         }
         
+        // Change between left2RightStrategy and right2LeftStrategy
+        left2RightStrategy = !left2RightStrategy;
+
         // Record suggested move in tiles
         readTilesFromButtons();
         tmp = tiles[row0][col0];
