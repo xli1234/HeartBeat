@@ -27,6 +27,12 @@ public class HeartBeat {
     private static final int THICK_BORDER = 5;
     private static final String TILES_FILE = "tiles.csv";
 
+    // Strategy:
+    // 0. Try max levels >= 3
+    // 1. Try at least 240 score
+    // 2. Try max levels in two turns
+    private static final int[] STRATEGIES = {2}; // ordered by priority
+
     /********** Enums **********/
     private enum TileType { unknown, blue, green, purple, red, yellow }
     private enum ButtonType { Color, Run, Tile }
@@ -176,7 +182,7 @@ public class HeartBeat {
     /********** Algorithm **********/
     
     // Compute score based on rules
-    private int computeBackupScore(ArrayList<Integer> counts) {
+    private int computeScore(ArrayList<Integer> counts) {
         // base score for 3,4,5,6,7
         int[] bases = {30, 50, 100, 60, 80};
         int score = 0;
@@ -187,6 +193,40 @@ public class HeartBeat {
         return score;
     }
     
+    private int computeNextLevel() {
+        TileType[][] nextTiles = new TileType[ROW_SIZE][COL_SIZE];
+        for(int row = 0; row < ROW_SIZE; ++row) {
+            for(int col = 0; col < COL_SIZE; ++col) {
+                nextTiles[row][col] = tiles[row][col];
+            }
+        }
+
+        int goodLevel = 0;
+        for(int dir = 0; dir <= 1; ++dir) {
+            for(int row = dir; row < ROW_SIZE; ++row) {
+                for(int tcol = 1 - dir; tcol < COL_SIZE; ++tcol) {
+                    int col = left2RightStrategy ? tcol : (COL_SIZE - dir - tcol);
+                    int r = row - dir;
+                    int c = col - 1 + dir;
+                    if (nextTiles[row][col] == TileType.unknown ||
+                        nextTiles[r][c] == TileType.unknown) {
+                        continue;
+                    }
+                    pushTiles(nextTiles);
+                    TileType tmp = tiles[r][c];
+                    tiles[r][c] = tiles[row][col];
+                    tiles[row][col] = tmp;
+                    int level = clearTiles().size();
+                    if (level >= goodLevel) {
+                        goodLevel = level;
+                    }
+                }
+            }
+        }
+
+        return goodLevel;
+    }
+
     private boolean clearable(TileType[][] ts, int row, int col) {
         if (ts[row][col] == TileType.unknown) {
             return false;
@@ -261,8 +301,11 @@ public class HeartBeat {
     private void suggestAlgo() {
         int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0;
         TileType tmp;
-        // Try 2nd strategy if clear level < 3
-        for(int strategy = 0; goodScore < 3 && strategy <= 1; ++strategy) {
+        for(int strategy : STRATEGIES) {
+            if (goodLevel >= 3 || goodScore >= 240) {
+                break;
+            }
+            goodScore = 0;
             // Check in below sequence:
             // 1. col combo -> row combo
             // 2. upper left -> bottom right
@@ -277,8 +320,23 @@ public class HeartBeat {
                         tiles[r][c] = tiles[row][col];
                         tiles[row][col] = tmp;
                         ArrayList<Integer> counts = clearTiles();
-                        int level = counts.size();
-                        int score = strategy == 0 ? level : computeBackupScore(counts);
+                        int score = 0, level = counts.size();
+                        switch(strategy) {
+                        case 0:
+                            score = level;
+                            break;
+                        case 1:
+                            score = computeScore(counts);
+                            break;
+                        case 2:
+                            score = level * 2;
+                            if (score != 0) {
+                                score += computeNextLevel();
+                            }
+                            break;
+                        default:
+                            System.exit(1);
+                        }
                         if (score >= goodScore) {
                             goodScore = score;
                             goodLevel = level;
