@@ -1,5 +1,6 @@
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedWriter;
@@ -15,33 +16,48 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTextArea;
 import javax.swing.border.LineBorder;
 
 public class HeartBeat {
     /********** Config **********/
-    private static final int ROW_SIZE = 10;
-    private static final int COL_SIZE = 9;
-    private static final int TILE_SIZE = 45;
+    public static final int ROW_SIZE = 10;
+    public static final int COL_SIZE = 9;
+    private static final int TILE_SIZE = 46;
     private static final int MID_TILE_SIZE = TILE_SIZE * 2;
-    private static final int LONG_TILE_SIZE = TILE_SIZE * 5;
+    private static final int LONG_TILE_SIZE = TILE_SIZE * 3;
     private static final int THICK_BORDER = 5;
     private static final String TILES_FILE = "tiles.csv";
+    private static final String TILE_ABBRE = "ubgpry";
+    private static final String TILE_CODE =
+              "yrbyyppbr,"
+            + "bbgbbyrgg,"
+            + "yprgryppy,"
+            + "yrpgrpggy,"
+            + "bybrbgrpr,"
+            + "ybryrbpgy,"
+            + "bggyygrbb,"
+            + "ryrgbpyyg,"
+            + "ybppgpyyg,"
+            + "rgbprggbr";
 
     // Strategy:
     // 0. Try max levels >= 3
     // 1. Try at least 240 score
     // 2. Try max levels in two turns
-    private static final int[] STRATEGIES = {2}; // ordered by priority
+    private static final int[] STRATEGIES = {0, 2}; // ordered by priority
 
     /********** Enums **********/
     private enum TileType { unknown, blue, green, purple, red, yellow }
-    private enum ButtonType { Color, Run, Tile }
+    private enum ButtonType { Color, Run, Update, Tile }
 
     /********** Components **********/
     private TileType[][] tiles; // temporary global to compute tiles grid and store result to refresh tileButtons
-    private JButton setButton, runButton;
+    private JButton setButton, runButton, updateButton;
     private JButton[][] tileButtons; // tile button, actual current color should always be from tileButtons
     private JLabel resultLabel;
+    private JTextArea[] rowTextAreas;
+    private JTextArea[] colTextAreas;
     
     private boolean left2RightStrategy;
 
@@ -121,6 +137,41 @@ public class HeartBeat {
                             resultLabel.setText("Missing color for some tiles!");
                         }
                     }
+                }
+            });
+            break;
+        case Update:
+            button.setPreferredSize(new Dimension(MID_TILE_SIZE, TILE_SIZE));
+            button.setText("Update");
+            button.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    readTilesFromButtons();
+                    for(int row = 0; row < ROW_SIZE; ++row) {
+                        String updateStr = rowTextAreas[row].getText();
+                        if (updateStr.length() == COL_SIZE) {
+                            rowTextAreas[row].setForeground(Color.BLACK);
+                            rowTextAreas[row].setText("");
+                            for(int col = 0; col < COL_SIZE; ++col) {
+                                tiles[row][col] = TileType.values()[getColorCode(updateStr, col)];
+                            }
+                        } else if (!updateStr.isEmpty()) {
+                            rowTextAreas[row].setForeground(Color.RED);
+                        }
+                    }
+                    for(int col = 0; col < COL_SIZE; ++col) {
+                        String updateStr = colTextAreas[col].getText();
+                        if (updateStr.length() == ROW_SIZE) {
+                            colTextAreas[col].setForeground(Color.BLACK);
+                            colTextAreas[col].setText("");
+                            for(int row = 0; row < ROW_SIZE; ++row) {
+                                tiles[row][col] = TileType.values()[getColorCode(updateStr, row)];
+                            }
+                        } else if (!updateStr.isEmpty()) {
+                            colTextAreas[col].setForeground(Color.RED);
+                        }
+                    }
+                    writeTilesToButtons();
                 }
             });
             break;
@@ -367,6 +418,14 @@ public class HeartBeat {
     
     /********** Load / Save **********/
     // For easy tuning
+    private int getColorCode(String updateStr, int pos) {
+        int colorCode = updateStr == null ? -1 : TILE_ABBRE.indexOf(updateStr.charAt(pos));
+        if (colorCode < 0) {
+            colorCode = 0;
+        }
+        return colorCode;
+    }
+    
     private void saveTiles() {
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(TILES_FILE));
@@ -395,9 +454,11 @@ public class HeartBeat {
             }
             scanner.close();
         } catch (Exception e) {
+            String[] line = TILE_CODE.isEmpty() ? null : TILE_CODE.split(",");
             for(int row = 0; row < ROW_SIZE; ++row) {
                 for(int col = 0; col < COL_SIZE; ++col) {
-                    tiles[row][col] = TileType.unknown;
+                    tiles[row][col] = line == null ? TileType.unknown:
+                        TileType.values()[getColorCode(line[row], col)];
                 }
             }
         }
@@ -412,35 +473,49 @@ public class HeartBeat {
         // Create top line
         setButton = createButton(ButtonType.Color);
         runButton = createButton(ButtonType.Run);
+        updateButton = createButton(ButtonType.Update);
         resultLabel = new JLabel();
         resultLabel.setPreferredSize(new Dimension(LONG_TILE_SIZE, TILE_SIZE));
         resultLabel.setBackground(Color.white);
         resultLabel.setOpaque(true);
-        JPanel topLine = new JPanel();
+        JPanel topLine = new JPanel(new FlowLayout(FlowLayout.LEFT));
         topLine.add(setButton);
         topLine.add(resultLabel);
         topLine.add(runButton);
+        topLine.add(updateButton);
         pane.add(topLine);
         
         // Create bottom grid
+        rowTextAreas = new JTextArea[ROW_SIZE];
+        colTextAreas = new JTextArea[COL_SIZE];
         loadTiles();
         tileButtons = new JButton[ROW_SIZE][COL_SIZE];
         for(int row = 0; row < ROW_SIZE; ++row) {
-            JPanel line = new JPanel();
+            JPanel line = new JPanel(new FlowLayout(FlowLayout.LEFT));
             for(int col = 0; col < COL_SIZE; ++col) {
                 tileButtons[row][col] = createButton(ButtonType.Tile);
                 tileButtons[row][col].setBackground(type2color(tiles[row][col]));
                 line.add(tileButtons[row][col]);
             }
+            rowTextAreas[row] = new JTextArea(3, 10);
+            rowTextAreas[row].setBorder(new LineBorder(Color.BLACK));
+            line.add(rowTextAreas[row]);
             pane.add(line);
         }
+        JPanel bottomLine = new JPanel(new FlowLayout(FlowLayout.LEFT));;
+        for(int col = 0; col < COL_SIZE; ++col) {
+            colTextAreas[col] = new JTextArea(8, 4);
+            colTextAreas[col].setBorder(new LineBorder(Color.BLACK));
+            bottomLine.add(colTextAreas[col]);
+        }
+        pane.add(bottomLine);
         
         // Disable tileButtons before start
         enableTileButtons(false);
         
         // Create a window
         JFrame window = new JFrame("HeartBeat");
-        window.setSize(650, 630);
+        window.setSize(630, 850);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         window.setContentPane(pane);
         window.setVisible(true);
