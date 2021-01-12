@@ -21,8 +21,8 @@ import javax.swing.border.LineBorder;
 
 public class HeartBeat {
     /********** Config **********/
-    public static final int ROW_SIZE = 10;
-    public static final int COL_SIZE = 9;
+    private static final int ROW_SIZE = 10;
+    private static final int COL_SIZE = 9;
     private static final int TILE_SIZE = 46;
     private static final int MID_TILE_SIZE = TILE_SIZE * 2;
     private static final int LONG_TILE_SIZE = TILE_SIZE * 3;
@@ -30,16 +30,16 @@ public class HeartBeat {
     private static final String TILES_FILE = "tiles.csv";
     private static final String TILE_ABBRE = "ubgpry";
     private static final String TILE_CODE =
-              "yrbyyppbr,"
-            + "bbgbbyrgg,"
-            + "yprgryppy,"
-            + "yrpgrpggy,"
-            + "bybrbgrpr,"
-            + "ybryrbpgy,"
-            + "bggyygrbb,"
-            + "ryrgbpyyg,"
-            + "ybppgpyyg,"
-            + "rgbprggbr";
+            "bgyyrbygr,"
+          + "ggyppgygg,"
+          + "byrbgypyb,"
+          + "ryprbyppb,"
+          + "bbgpprbyy,"
+          + "bgyyuprbg,"
+          + "pryguybgy,"
+          + "ypuupugrp,"
+          + "pggprbygb,"
+          + "byprbryrb";
 
     // Strategy:
     // 0. Try max levels >= 3
@@ -172,6 +172,7 @@ public class HeartBeat {
                         }
                     }
                     writeTilesToButtons();
+                    saveTiles(); // save since we trust your update
                 }
             });
             break;
@@ -425,7 +426,7 @@ public class HeartBeat {
         }
         return colorCode;
     }
-    
+
     private void saveTiles() {
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(TILES_FILE));
@@ -441,9 +442,12 @@ public class HeartBeat {
             System.out.println("Save failed!");
         }
     }
-    
+
     private void loadTiles() {
         tiles = new TileType[ROW_SIZE][COL_SIZE];
+        // Load trying sequence
+        // 1. from save
+        System.out.println("Try load from saved data...");
         try {
             Scanner scanner = new Scanner(new File(TILES_FILE));
             for(int row = 0; row < ROW_SIZE; ++row) {
@@ -453,23 +457,41 @@ public class HeartBeat {
                 }
             }
             scanner.close();
+            return;
         } catch (Exception e) {
-            String[] line = TILE_CODE.isEmpty() ? null : TILE_CODE.split(",");
+            System.out.println("Try load from img...");
+        }
+
+        // 2. from img
+        try {
+            Image img = new Image();
+            int[][] tileTypes = img.read(ROW_SIZE, COL_SIZE);
             for(int row = 0; row < ROW_SIZE; ++row) {
                 for(int col = 0; col < COL_SIZE; ++col) {
-                    tiles[row][col] = line == null ? TileType.unknown:
-                        TileType.values()[getColorCode(line[row], col)];
+                    tiles[row][col] = TileType.values()[tileTypes[row][col]];
                 }
+            }
+            return;
+        } catch (Exception e) {
+            System.out.println("Try load from hardcode...");
+        }
+
+        // 3. from hardcode
+        String[] line = TILE_CODE.isEmpty() ? null : TILE_CODE.split(",");
+        for(int row = 0; row < ROW_SIZE; ++row) {
+            for(int col = 0; col < COL_SIZE; ++col) {
+                tiles[row][col] = line == null ? TileType.unknown:
+                    TileType.values()[getColorCode(line[row], col)];
             }
         }
     }
-    
+
     /********** Main **********/
     public HeartBeat() {
         // create a container
         JPanel pane = new JPanel();
         pane.setLayout(new BoxLayout(pane, BoxLayout.Y_AXIS));
-        
+
         // Create top line
         setButton = createButton(ButtonType.Color);
         runButton = createButton(ButtonType.Run);
@@ -484,7 +506,7 @@ public class HeartBeat {
         topLine.add(runButton);
         topLine.add(updateButton);
         pane.add(topLine);
-        
+
         // Create bottom grid
         rowTextAreas = new JTextArea[ROW_SIZE];
         colTextAreas = new JTextArea[COL_SIZE];
