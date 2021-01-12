@@ -25,13 +25,13 @@ public class HeartBeat {
     private static final int COL_SIZE = 9;
     private static final int TILE_SIZE = 46;
     private static final int MID_TILE_SIZE = TILE_SIZE * 2;
-    private static final int LONG_TILE_SIZE = TILE_SIZE * 3;
+    private static final int LONG_TILE_SIZE = TILE_SIZE * 2;
     private static final int THICK_BORDER = 5;
     private static final String TILES_FILE = "tiles.csv";
     private static final String TILE_ABBRE = "ubgpry";
     private static final String TILE_CODE =
             "bgyyrbygr,"
-          + "ggyppgygg,"
+          + "uuuuuuuuu,"
           + "byrbgypyb,"
           + "ryprbyppb,"
           + "bbgpprbyy,"
@@ -49,11 +49,11 @@ public class HeartBeat {
 
     /********** Enums **********/
     private enum TileType { unknown, blue, green, purple, red, yellow }
-    private enum ButtonType { Color, Run, Update, Tile }
+    private enum ButtonType { Tile, Color, Run, Update, Save, Load }
 
     /********** Components **********/
     private TileType[][] tiles; // temporary global to compute tiles grid and store result to refresh tileButtons
-    private JButton setButton, runButton, updateButton;
+    private JButton setButton;
     private JButton[][] tileButtons; // tile button, actual current color should always be from tileButtons
     private JLabel resultLabel;
     private JTextArea[] rowTextAreas;
@@ -125,8 +125,6 @@ public class HeartBeat {
                         button.setText("Suggest");
                         enableTileButtons(true);
                         done = false;
-                        // Save to a file in case we close app
-                        saveTiles();
                     } else {
                         if (readTilesFromButtons()) {
                             suggestAlgo();
@@ -134,7 +132,7 @@ public class HeartBeat {
                             enableTileButtons(false);
                             done = true;
                         } else {
-                            resultLabel.setText("Missing color for some tiles!");
+                            resultLabel.setText("Missing tiles!");
                         }
                     }
                 }
@@ -172,7 +170,28 @@ public class HeartBeat {
                         }
                     }
                     writeTilesToButtons();
-                    saveTiles(); // save since we trust your update
+                }
+            });
+            break;
+        case Save:
+            button.setPreferredSize(new Dimension(MID_TILE_SIZE, TILE_SIZE));
+            button.setText("Save");
+            button.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    readTilesFromButtons();
+                    saveTiles();
+                }
+            });
+            break;
+        case Load:
+            button.setPreferredSize(new Dimension(MID_TILE_SIZE, TILE_SIZE));
+            button.setText("Load");
+            button.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent event) {
+                    loadTiles();
+                    writeTilesToButtons();
                 }
             });
             break;
@@ -414,7 +433,7 @@ public class HeartBeat {
         tileButtons[row0][col0].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
         tileButtons[row1][col1].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
         // Note resultLabel
-        resultLabel.setText("level:" + goodLevel + ", Score:" + goodScore);
+        resultLabel.setText("Level:" + goodLevel + ", Score:" + goodScore);
     }
     
     /********** Load / Save **********/
@@ -494,8 +513,6 @@ public class HeartBeat {
 
         // Create top line
         setButton = createButton(ButtonType.Color);
-        runButton = createButton(ButtonType.Run);
-        updateButton = createButton(ButtonType.Update);
         resultLabel = new JLabel();
         resultLabel.setPreferredSize(new Dimension(LONG_TILE_SIZE, TILE_SIZE));
         resultLabel.setBackground(Color.white);
@@ -503,8 +520,10 @@ public class HeartBeat {
         JPanel topLine = new JPanel(new FlowLayout(FlowLayout.LEFT));
         topLine.add(setButton);
         topLine.add(resultLabel);
-        topLine.add(runButton);
-        topLine.add(updateButton);
+        topLine.add(createButton(ButtonType.Run));
+        topLine.add(createButton(ButtonType.Update));
+        topLine.add(createButton(ButtonType.Save));
+        topLine.add(createButton(ButtonType.Load));
         pane.add(topLine);
 
         // Create bottom grid

@@ -8,9 +8,11 @@ public class Image {
 
     private static final String IMAGE_FILE = "hb.PNG";
     private static final double[][] TILE_RGB = { // magic numbers from experiment
-            {148.93,  188.54,  198.10}, // unknown
+//            {148.93,  188.54,  198.10}, //unknown
+            {  0.00,    0.00,    0.00}, // let's not have unknown
             {121.61,  193.14,  223.83}, // blue
-            { 86.76,  205.38,  182.37}, // green
+//            { 86.76,  205.38,  182.37}, // green
+            {127.76,  203.38,  184.37}, // green
             {178.13,  158.67,  246.59}, // purple
             {250.98,  161.80,  192.76}, // red
             {246.35,  207.38,  129.93}  // yellow
@@ -70,7 +72,9 @@ public class Image {
             for(int c = 0; c < colSize; ++c) {
                 double[] rgb = getAvgRGB(start + c * len, start + r * len, len);
                 tileTypes[r][c] = rgb2type(rgb);
+//                System.out.printf("%3.0f,%3.0f,%3.0f   ", rgb[0], rgb[1], rgb[2]);
             }
+//            System.out.println();
         }
         return tileTypes;
     }
