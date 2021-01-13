@@ -1,12 +1,17 @@
 import java.awt.Color;
+import java.awt.FlowLayout;
 import java.awt.image.BufferedImage;
 import java.io.File;
 
 import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 
 public class Image {
 
-    private static final String IMAGE_FILE = "hb.PNG";
+//    private static final String IMAGE_FILE = "hb.PNG";
+    private static final String IMAGE_FILE = "hb.jpg";
     private static final double[][] TILE_RGB = { // magic numbers from experiment
 //            {148.93,  188.54,  198.10}, //unknown
             {  0.00,    0.00,    0.00}, // let's not have unknown
@@ -34,7 +39,7 @@ public class Image {
         return type;
     }
     
-    private BufferedImage image;
+    public BufferedImage image;
     
     public Image() throws Exception {
         image = ImageIO.read(new File(IMAGE_FILE));
@@ -64,18 +69,22 @@ public class Image {
         int[][] tileTypes = new int[rowSize][colSize];
         // We need more accuracy on position
         // Don't cast to int till very end
-        double width = image.getWidth();
-        double height = image.getHeight();
+        double width = 1035;
+        double height = 1150;
         double len = (width + height) / (rowSize + colSize);
-        double start = len / 2;
+        double startRow = 740, startCol = 75;
         for(int r = 0; r < rowSize; ++r) {
             for(int c = 0; c < colSize; ++c) {
-                double[] rgb = getAvgRGB(start + c * len, start + r * len, len);
+                double[] rgb = getAvgRGB(startCol + c * len, startRow + r * len, len);
                 tileTypes[r][c] = rgb2type(rgb);
 //                System.out.printf("%3.0f,%3.0f,%3.0f   ", rgb[0], rgb[1], rgb[2]);
             }
 //            System.out.println();
         }
         return tileTypes;
+    }
+    
+    public static void main(String[] args) throws Exception {
+        new Image().read(10, 9);
     }
 }

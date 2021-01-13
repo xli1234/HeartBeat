@@ -23,9 +23,11 @@ public class HeartBeat {
     /********** Config **********/
     private static final int ROW_SIZE = 10;
     private static final int COL_SIZE = 9;
-    private static final int TILE_SIZE = 46;
+    private static final int WINDOW_ROW = 600;
+    private static final int WINDOW_COL = 800;
+    private static final int TILE_SIZE = 55;
     private static final int MID_TILE_SIZE = TILE_SIZE * 2;
-    private static final int LONG_TILE_SIZE = TILE_SIZE * 2;
+    private static final int RESULT_LABEL_SIZE = 190;
     private static final int THICK_BORDER = 5;
     private static final String TILES_FILE = "tiles.csv";
     private static final String TILE_ABBRE = "ubgpry";
@@ -492,6 +494,7 @@ public class HeartBeat {
             }
             return;
         } catch (Exception e) {
+            System.out.println(e);
             System.out.println("Try load from hardcode...");
         }
 
@@ -514,15 +517,15 @@ public class HeartBeat {
         // Create top line
         setButton = createButton(ButtonType.Color);
         resultLabel = new JLabel();
-        resultLabel.setPreferredSize(new Dimension(LONG_TILE_SIZE, TILE_SIZE));
+        resultLabel.setPreferredSize(new Dimension(RESULT_LABEL_SIZE, TILE_SIZE));
         resultLabel.setBackground(Color.white);
         resultLabel.setOpaque(true);
-        JPanel topLine = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel topLine = new JPanel();
         topLine.add(setButton);
         topLine.add(resultLabel);
         topLine.add(createButton(ButtonType.Run));
-        topLine.add(createButton(ButtonType.Update));
-        topLine.add(createButton(ButtonType.Save));
+//        topLine.add(createButton(ButtonType.Update));
+//        topLine.add(createButton(ButtonType.Save));
         topLine.add(createButton(ButtonType.Load));
         pane.add(topLine);
 
@@ -532,15 +535,15 @@ public class HeartBeat {
         loadTiles();
         tileButtons = new JButton[ROW_SIZE][COL_SIZE];
         for(int row = 0; row < ROW_SIZE; ++row) {
-            JPanel line = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            JPanel line = new JPanel();
             for(int col = 0; col < COL_SIZE; ++col) {
                 tileButtons[row][col] = createButton(ButtonType.Tile);
                 tileButtons[row][col].setBackground(type2color(tiles[row][col]));
                 line.add(tileButtons[row][col]);
             }
-            rowTextAreas[row] = new JTextArea(3, 10);
+            rowTextAreas[row] = new JTextArea(3, 20);
             rowTextAreas[row].setBorder(new LineBorder(Color.BLACK));
-            line.add(rowTextAreas[row]);
+//            line.add(rowTextAreas[row]);
             pane.add(line);
         }
         JPanel bottomLine = new JPanel(new FlowLayout(FlowLayout.LEFT));;
@@ -549,14 +552,14 @@ public class HeartBeat {
             colTextAreas[col].setBorder(new LineBorder(Color.BLACK));
             bottomLine.add(colTextAreas[col]);
         }
-        pane.add(bottomLine);
+//        pane.add(bottomLine);
         
         // Disable tileButtons before start
         enableTileButtons(false);
         
         // Create a window
         JFrame window = new JFrame("HeartBeat");
-        window.setSize(630, 850);
+        window.setSize(WINDOW_ROW, WINDOW_COL);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         window.setContentPane(pane);
         window.setVisible(true);
