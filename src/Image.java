@@ -12,6 +12,7 @@ public class Image {
 
 //    private static final String IMAGE_FILE = "hb.PNG";
     private static final String IMAGE_FILE = "hb.jpg";
+    private static final String IMAGE_DIR = "C:\\Users\\lixum\\Dropbox\\Camera uploads";
     private static final double[][] TILE_RGB = { // magic numbers from experiment
 //            {148.93,  188.54,  198.10}, //unknown
             {  0.00,    0.00,    0.00}, // let's not have unknown
@@ -22,6 +23,28 @@ public class Image {
             {250.98,  161.80,  192.76}, // red
             {246.35,  207.38,  129.93}  // yellow
     };
+    
+    private File getLastModified() {
+        File directory = new File(IMAGE_DIR);
+        File[] files = directory.listFiles(File::isFile);
+        long lastModifiedTime = Long.MIN_VALUE;
+        File chosenFile = null;
+
+        if (files != null)
+        {
+            for (File file : files)
+            {
+                if (file.lastModified() > lastModifiedTime)
+                {
+                    chosenFile = file;
+                    lastModifiedTime = file.lastModified();
+                }
+            }
+        }
+        
+
+        return chosenFile;
+    }
     
     private int rgb2type(double[] rgb) {
         int type = 0;
@@ -42,7 +65,8 @@ public class Image {
     public BufferedImage image;
     
     public Image() throws Exception {
-        image = ImageIO.read(new File(IMAGE_FILE));
+        File imgFile = getLastModified();
+        image = ImageIO.read(imgFile == null ? new File(IMAGE_FILE) : imgFile);
     }
     
     private double[] getAvgRGB(double row, double col, double len) {

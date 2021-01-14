@@ -116,7 +116,7 @@ public class HeartBeat {
             button.setPreferredSize(new Dimension(MID_TILE_SIZE, TILE_SIZE));
             button.setText("Start");
             button.addActionListener(new ActionListener() {
-                boolean done = true;
+                boolean done = false;
                 @Override
                 public void actionPerformed(ActionEvent event) {
                     if (done) {
@@ -130,9 +130,10 @@ public class HeartBeat {
                     } else {
                         if (readTilesFromButtons()) {
                             suggestAlgo();
-                            button.setText("Done!");
-                            enableTileButtons(false);
-                            done = true;
+//                            button.setText("Done!");
+                            button.setText("Algo!");
+//                            enableTileButtons(false);
+//                            done = true;
                         } else {
                             resultLabel.setText("Missing tiles!");
                         }
@@ -372,12 +373,15 @@ public class HeartBeat {
     // Record best option based on good score
     // Good score criteria is defined in computeScore
     private void suggestAlgo() {
-        int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0;
+        int row0 = -1, col0 = -1, row1 = -1, col1 = -1, goodLevel = 0, goodScore = 0, goodStrategy = 0;
         TileType tmp;
         for(int strategy : STRATEGIES) {
-            if (goodLevel >= 3 || goodScore >= 240) {
+            // TODO maybe prepare if 1 and nextLevel is 5
+            if (goodLevel >= 3 || goodLevel + goodScore > 15) {
                 break;
             }
+            goodStrategy = strategy;
+            goodLevel = 0;
             goodScore = 0;
             // Check in below sequence:
             // 1. col combo -> row combo
@@ -396,21 +400,23 @@ public class HeartBeat {
                         int score = 0, level = counts.size();
                         switch(strategy) {
                         case 0:
-                            score = level;
+                            for(int i = 0; i < counts.size(); ++i) {
+                                score += counts.get(i);
+                            }
                             break;
                         case 1:
                             score = computeScore(counts);
                             break;
                         case 2:
-                            score = level * 2;
-                            if (score != 0) {
-                                score += computeNextLevel();
-                            }
+                            score = level > 0 ? computeNextLevel() : 0;
                             break;
                         default:
                             System.exit(1);
                         }
-                        if (score >= goodScore) {
+                        if ((level == goodLevel && score >= goodScore) || // If same level, pick more score
+                            (level >= 3 && level > goodLevel) || // If above 3+, more level the better, but if same level,
+                                                                 // don't pick, it will be pick if more scores in previous check
+                            (goodLevel < 3 && score >= goodScore)) {  // If 1 or 2 level, score is more important
                             goodScore = score;
                             goodLevel = level;
                             row0 = r;
@@ -435,7 +441,7 @@ public class HeartBeat {
         tileButtons[row0][col0].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
         tileButtons[row1][col1].setBorder(BorderFactory.createLineBorder(Color.BLACK, THICK_BORDER));
         // Note resultLabel
-        resultLabel.setText("Level:" + goodLevel + ", Score:" + goodScore);
+        resultLabel.setText("Level:" + goodLevel + ", Strategy:" + goodStrategy + ", Score:" + goodScore);
     }
     
     /********** Load / Save **********/
@@ -468,7 +474,7 @@ public class HeartBeat {
         tiles = new TileType[ROW_SIZE][COL_SIZE];
         // Load trying sequence
         // 1. from save
-        System.out.println("Try load from saved data...");
+//        System.out.println("Try load from saved data...");
         try {
             Scanner scanner = new Scanner(new File(TILES_FILE));
             for(int row = 0; row < ROW_SIZE; ++row) {
@@ -480,7 +486,7 @@ public class HeartBeat {
             scanner.close();
             return;
         } catch (Exception e) {
-            System.out.println("Try load from img...");
+//            System.out.println("Try load from img...");
         }
 
         // 2. from img
@@ -495,7 +501,7 @@ public class HeartBeat {
             return;
         } catch (Exception e) {
             System.out.println(e);
-            System.out.println("Try load from hardcode...");
+//            System.out.println("Try load from hardcode...");
         }
 
         // 3. from hardcode
@@ -555,7 +561,7 @@ public class HeartBeat {
 //        pane.add(bottomLine);
         
         // Disable tileButtons before start
-        enableTileButtons(false);
+//        enableTileButtons(false);
         
         // Create a window
         JFrame window = new JFrame("HeartBeat");
